@@ -64,7 +64,9 @@ struct doca_gpu_verbs_qp_init_attr_hl {
     bool enable_umem_cpu;
     uint8_t reserved2[2];
     enum doca_verbs_qp_ordering_semantic ordering_semantic;
-    uint8_t reserved3[12];
+    /* DOCA_VERBS_QP_TYPE_RC or DOCA_VERBS_QP_TYPE_UC; zero preserves the RC default. */
+    uint32_t qp_type;
+    uint8_t reserved3[8];
 } __attribute__((__aligned__(8))) __attribute__((__packed__));
 
 struct doca_gpu_verbs_qp_hl {

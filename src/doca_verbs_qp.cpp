@@ -121,47 +121,63 @@ using qp_2rst_out = uint32_t[MLX5_ST_SZ_DW(qp_2rst_out)];
 using query_qp_in = uint32_t[MLX5_ST_SZ_DW(query_qp_in)];
 using query_qp_out = uint32_t[MLX5_ST_SZ_DW(query_qp_out)];
 
-int rst2init_requested_attr[DOCA_VERBS_QP_TYPE_RC + 1] = {
+int rst2init_requested_attr[DOCA_VERBS_QP_TYPE_UC + 1] = {
     /* [DOCA_VERBS_QP_TYPE_RC] */
     QP_ATTR(PKEY_INDEX) | QP_ATTR(PORT_NUM) | QP_ATTR(ALLOW_REMOTE_WRITE) |
         QP_ATTR(ALLOW_REMOTE_READ),
+    /* [DOCA_VERBS_QP_TYPE_UC] */
+    QP_ATTR(PKEY_INDEX) | QP_ATTR(PORT_NUM) | QP_ATTR(ALLOW_REMOTE_WRITE),
 };
 
-int init2rtr_requested_attr[DOCA_VERBS_QP_TYPE_RC + 1] = {
+int init2rtr_requested_attr[DOCA_VERBS_QP_TYPE_UC + 1] = {
     /* [DOCA_VERBS_QP_TYPE_RC] */
     QP_ATTR(RQ_PSN) | QP_ATTR(DEST_QP_NUM) | QP_ATTR(PATH_MTU) | QP_ATTR(AH_ATTR) |
         QP_ATTR(MIN_RNR_TIMER),
+    /* [DOCA_VERBS_QP_TYPE_UC] */
+    QP_ATTR(RQ_PSN) | QP_ATTR(DEST_QP_NUM) | QP_ATTR(PATH_MTU) | QP_ATTR(AH_ATTR),
 };
 
-int rtr2rts_requested_attr[DOCA_VERBS_QP_TYPE_RC + 1] = {
+int rtr2rts_requested_attr[DOCA_VERBS_QP_TYPE_UC + 1] = {
     /* [DOCA_VERBS_QP_TYPE_RC] */
     QP_ATTR(SQ_PSN) | QP_ATTR(ACK_TIMEOUT) | QP_ATTR(RETRY_CNT) | QP_ATTR(RNR_RETRY),
+    /* [DOCA_VERBS_QP_TYPE_UC] */
+    QP_ATTR(SQ_PSN),
 };
 
-int init2init_optional_attr[DOCA_VERBS_QP_TYPE_RC + 1] = {
+int init2init_optional_attr[DOCA_VERBS_QP_TYPE_UC + 1] = {
     /* [DOCA_VERBS_QP_TYPE_RC] */
     QP_ATTR(CURRENT_STATE) | QP_ATTR(NEXT_STATE) | QP_ATTR(PKEY_INDEX) | QP_ATTR(PORT_NUM) |
         QP_ATTR(ALLOW_REMOTE_WRITE) | QP_ATTR(ALLOW_REMOTE_READ) | QP_ATTR(ATOMIC_MODE),
+    /* [DOCA_VERBS_QP_TYPE_UC] */
+    QP_ATTR(CURRENT_STATE) | QP_ATTR(NEXT_STATE) | QP_ATTR(PKEY_INDEX) | QP_ATTR(PORT_NUM) |
+        QP_ATTR(ALLOW_REMOTE_WRITE),
 };
 
-int init2rtr_optional_attr[DOCA_VERBS_QP_TYPE_RC + 1] = {
+int init2rtr_optional_attr[DOCA_VERBS_QP_TYPE_UC + 1] = {
     /* [DOCA_VERBS_QP_TYPE_RC] */
     QP_ATTR(CURRENT_STATE) | QP_ATTR(NEXT_STATE) | QP_ATTR(PKEY_INDEX) |
         QP_ATTR(ALLOW_REMOTE_WRITE) | QP_ATTR(ALLOW_REMOTE_READ) | QP_ATTR(ATOMIC_MODE) |
         QP_ATTR(MAX_DEST_RD_ATOMIC),
+    /* [DOCA_VERBS_QP_TYPE_UC] */
+    QP_ATTR(CURRENT_STATE) | QP_ATTR(NEXT_STATE) | QP_ATTR(PKEY_INDEX) |
+        QP_ATTR(ALLOW_REMOTE_WRITE),
 };
 
-int rtr2rts_optional_attr[DOCA_VERBS_QP_TYPE_RC + 1] = {
+int rtr2rts_optional_attr[DOCA_VERBS_QP_TYPE_UC + 1] = {
     /* [DOCA_VERBS_QP_TYPE_RC] */
     QP_ATTR(CURRENT_STATE) | QP_ATTR(NEXT_STATE) | QP_ATTR(MIN_RNR_TIMER) |
         QP_ATTR(ALLOW_REMOTE_WRITE) | QP_ATTR(ATOMIC_MODE) | QP_ATTR(MAX_QP_RD_ATOMIC),
+    /* [DOCA_VERBS_QP_TYPE_UC] */
+    QP_ATTR(CURRENT_STATE) | QP_ATTR(NEXT_STATE) | QP_ATTR(ALLOW_REMOTE_WRITE),
 };
 
-int rts2rts_optional_attr[DOCA_VERBS_QP_TYPE_RC + 1] = {
+int rts2rts_optional_attr[DOCA_VERBS_QP_TYPE_UC + 1] = {
     /* [DOCA_VERBS_QP_TYPE_RC] */
     QP_ATTR(CURRENT_STATE) | QP_ATTR(NEXT_STATE) | QP_ATTR(ALLOW_REMOTE_WRITE) |
         QP_ATTR(ALLOW_REMOTE_READ) | QP_ATTR(ATOMIC_MODE) | QP_ATTR(MIN_RNR_TIMER) |
         QP_ATTR(AH_ATTR),
+    /* [DOCA_VERBS_QP_TYPE_UC] */
+    QP_ATTR(CURRENT_STATE) | QP_ATTR(NEXT_STATE) | QP_ATTR(ALLOW_REMOTE_WRITE) | QP_ATTR(AH_ATTR),
 };
 
 const char *qp_attr_to_string(int attr) {
@@ -260,7 +276,8 @@ bool is_X2err_attrs_valid(int attr_mask) {
 bool is_rst2init_attrs_valid(int attr_mask, uint32_t qp_type) {
     int required_attr = rst2init_requested_attr[qp_type];
     int valid_attr = required_attr | DOCA_VERBS_QP_ATTR_CURRENT_STATE |
-                     DOCA_VERBS_QP_ATTR_NEXT_STATE | DOCA_VERBS_QP_ATTR_ATOMIC_MODE;
+                     DOCA_VERBS_QP_ATTR_NEXT_STATE;
+    if (qp_type == DOCA_VERBS_QP_TYPE_RC) valid_attr |= DOCA_VERBS_QP_ATTR_ATOMIC_MODE;
 
     if (attr_mask & ~(valid_attr)) {
         DOCA_LOG(LOG_ERR, "attr_mask contains invalid bit attr_masks (attr_mask=%d)", attr_mask);
@@ -704,7 +721,9 @@ doca_error_t doca_verbs_qp_open::create_qp_obj(
     const bool use_rq = ((m_rq_size > 0) || (verbs_qp_init_attr->srq != nullptr));
 
     DEVX_SET(create_qp_in, create_in, opcode, MLX5_CMD_OP_CREATE_QP);
-    DEVX_SET(qpc, qpc, st, MLX5_QPC_ST_RC);
+    DEVX_SET(qpc, qpc, st,
+             verbs_qp_init_attr->qp_type == DOCA_VERBS_QP_TYPE_UC ? MLX5_QPC_ST_UC
+                                                                  : MLX5_QPC_ST_RC);
 
     struct mlx5dv_pd dvpd;
     struct mlx5dv_obj dv_obj;
@@ -1313,10 +1332,19 @@ void doca_verbs_qp_open::create() {
         throw DOCA_ERROR_INVALID_VALUE;
     }
 
-    if (m_init_attr.qp_type != DOCA_VERBS_QP_TYPE_RC) {
+    if (m_init_attr.qp_type != DOCA_VERBS_QP_TYPE_RC &&
+        m_init_attr.qp_type != DOCA_VERBS_QP_TYPE_UC) {
         DOCA_LOG(LOG_ERR, "QP type is not valid");
         throw DOCA_ERROR_INVALID_VALUE;
     }
+
+    status = doca_verbs_device_attr_get_is_qp_type_supported(m_verbs_device_attr,
+                                                              m_init_attr.qp_type);
+    if (status != DOCA_SUCCESS) {
+        DOCA_LOG(LOG_ERR, "QP type %u is not supported by the device", m_init_attr.qp_type);
+        throw status;
+    }
+    m_qp_type = m_init_attr.qp_type;
 
     if ((m_init_attr.send_dbr_mode == DOCA_VERBS_QP_SEND_DBR_MODE_NO_DBR_EXT) &&
         (m_verbs_device_attr->m_send_dbr_mode_no_dbr_ext == 0)) {

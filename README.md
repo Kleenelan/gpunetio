@@ -32,7 +32,7 @@ This approach promotes knowledge sharing while reducing the engineering effort r
 
 **CPU control path:**
 - Interfaces to create and manage completion queues (CQs) and queue pairs (QPs) in CPU/GPU memory.
-- Support for connecting QPs over Reliable Connection (RC) transport.
+- Support for connecting QPs over Reliable Connection (RC) and Unreliable Connection (UC) transports.
 - Move CQ/QP resources between CPU and GPU memory.
 - Compatibility with standard `verbs` resources (MRs, PDs, context, device attributes, etc.).
 - Possibility to use DOCA SDK restricted features via internal `dlopen`-based dynamic linking.
@@ -62,7 +62,7 @@ A GPU data path phase, where a CUDA kernel is launched and GPUNetIO CUDA functio
 ### Data Path Workflow
 1. Launch a GPU kernel
 2. Post work requests using:
-  - High-level API in CUDA header files `doca_gpunetio_dev_verbs_onesided.cuh` and `doca_gpunetio_dev_verbs_counter.cuh` starting with `doca_gpu_dev_verbs_*`
+  - High-level API in CUDA header files `doca_gpunetio_dev_verbs_onesided.cuh`, `doca_gpunetio_dev_verbs_twosided.cuh` and `doca_gpunetio_dev_verbs_counter.cuh` starting with `doca_gpu_dev_verbs_*`
   - Low-level API (advanced users) in CUDA header files like `doca_gpunetio_dev_verbs_qp.cuh` and `doca_gpunetio_dev_verbs_cq.cuh` like `doca_gpu_dev_verbs_wqe_prepare_*`, `doca_gpu_dev_verbs_submit`
 3. Poll completions with: `doca_gpu_dev_verbs_poll_cq_*`
 
@@ -254,7 +254,23 @@ LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/doca-gpunetio/lib DOCA_GPUNETIO_LOG=
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/doca-gpunetio/lib DOCA_GPUNETIO_LOG=6 ./gpunetio_verbs_send_recv -g 65:00.0 -d mlx5_1 -l 3 -p 2 -a high -b ibv -c 192.168.0.200
 ```
 
-For low-level `SEND_IMM`, use `-a low -m`. For CPU proxy mode, use `-p 1`. See `example_rc_send_receive_run.md` for the full command matrix and `principle.md` for implementation details.
+For low-level `SEND_IMM`, use `-a low -m`. For CPU proxy mode, use `-p 1`. See `examples/gpunetio_verbs_send_recv/README.md` for the full command matrix.
+
+### Example 5: `gpunetio_verbs_send_recv_UC`
+
+This example demonstrates two-sided UC Send/Receive with the same API and backend coverage as the RC example: high-level and low-level GPU APIs, `SEND`/`SEND_IMM`, GPU SM doorbells, CPU proxy, and `ibv`/custom DEVX QPs. The UC example pre-posts receives and synchronizes both peers before sending because UC does not provide retransmission or RNR recovery.
+
+**Run (server):**
+```bash
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/doca-gpunetio/lib DOCA_GPUNETIO_LOG=6 ./gpunetio_verbs_send_recv_UC -g 65:00.0 -d mlx5_0 -l 3 -p 2 -a high -b ibv
+```
+
+**Run (client):**
+```bash
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/doca-gpunetio/lib DOCA_GPUNETIO_LOG=6 ./gpunetio_verbs_send_recv_UC -g 65:00.0 -d mlx5_1 -l 3 -p 2 -a high -b ibv -c 192.168.0.200
+```
+
+See `examples/gpunetio_verbs_send_recv_UC/README.md` for build instructions and the complete test matrix.
 
 ## Acknowledgments
 

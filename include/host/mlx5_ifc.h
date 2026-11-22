@@ -3373,6 +3373,7 @@ struct mlx5_ifc_query_nic_vport_context_in_bits {
 
 enum {
     MLX5_QPC_ST_RC = 0x0,
+    MLX5_QPC_ST_UC = 0x1,
 };
 
 enum {

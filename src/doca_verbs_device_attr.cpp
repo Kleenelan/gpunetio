@@ -136,6 +136,7 @@ void doca_verbs_device_attr::query_caps(struct ibv_context *ibv_ctx) {
         m_gid_table_size = translate_gid_table_size(
             DEVX_GET(query_hca_cap_out, out, capability.cmd_hca_cap.gid_table_size));
     m_is_qp_rc_supported = DEVX_GET(query_hca_cap_out, out, capability.cmd_hca_cap.rc);
+    m_is_qp_uc_supported = DEVX_GET(query_hca_cap_out, out, capability.cmd_hca_cap.uc);
     m_is_rts2rts_qp_dscp_supported =
         DEVX_GET(query_hca_cap_out, out, capability.cmd_hca_cap.rts2rts_qp_dscp);
     m_max_sq_desc_size = DEVX_GET(query_hca_cap_out, out, capability.cmd_hca_cap.max_wqe_sz_sq);
@@ -280,7 +281,9 @@ doca_error_t doca_verbs_device_attr_get_is_qp_type_supported(
         case DOCA_VERBS_QP_TYPE_RC:
             return verbs_device_attr->m_is_qp_rc_supported ? DOCA_SUCCESS
                                                            : DOCA_ERROR_NOT_SUPPORTED;
-            break;
+        case DOCA_VERBS_QP_TYPE_UC:
+            return verbs_device_attr->m_is_qp_uc_supported ? DOCA_SUCCESS
+                                                           : DOCA_ERROR_NOT_SUPPORTED;
         default:
             DOCA_LOG(LOG_ERR, "Failed to check if QP type is supported. param QP type is invalid");
             return DOCA_ERROR_INVALID_VALUE;

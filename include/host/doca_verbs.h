@@ -228,6 +228,11 @@ struct doca_verbs_device_attr;
 #define DOCA_VERBS_QP_TYPE_RC 0x0
 
 /**
+ * @brief Verbs UC QP type define.
+ */
+#define DOCA_VERBS_QP_TYPE_UC 0x1
+
+/**
  * @brief Verbs QP state.
  */
 enum doca_verbs_qp_state {
