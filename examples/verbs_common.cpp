@@ -319,6 +319,7 @@ doca_error_t create_verbs_resources(struct verbs_config *cfg, struct verbs_resou
     qp_init.net_dev = resources->net_dev;
     qp_init.ibpd = resources->verbs_pd;
     qp_init.sq_nwqe = VERBS_TEST_QUEUE_SIZE;
+    qp_init.rq_nwqe = cfg->rq_nwqe;
     qp_init.nic_handler = resources->nic_handler;
     qp_init.mreg_type = DOCA_GPUNETIO_VERBS_MEM_REG_TYPE_DEFAULT;
     qp_init.send_dbr_mode_ext = resources->send_dbr_mode_ext;

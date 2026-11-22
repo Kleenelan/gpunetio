@@ -89,6 +89,11 @@ struct verbs_config {
     std::string server_ip_addr;  /* DOCA device name */
     uint32_t num_iters;          /* total number orations per cuda kernel */
     uint32_t cuda_threads;       /* cuda threads per cuda block */
+    uint16_t rq_nwqe{0};         /* RQ size; zero keeps the legacy SQ-only behavior */
+    bool use_low_level{false};   /* Send/Recv example: use low-level WQE/CQE APIs */
+    bool use_immediate{false};   /* Send/Recv example: use SEND_IMM instead of SEND */
+    uint32_t message_size{64};   /* Send/Recv example message size in bytes */
+    bool use_ibv_backend{false}; /* Send/Recv example: use standard ibv_qp backend */
     enum doca_gpu_dev_verbs_nic_handler nic_handler;
     uint8_t exec_scope;
     enum doca_gpu_verbs_send_dbr_mode_ext
@@ -136,6 +141,13 @@ struct verbs_resources {
         send_dbr_mode_ext; /* Enable send dbr mode ext to avoid DBREC update on sending */
 
     bool enable_umem_cpu; /* Enable creation of QP/CQ UMEM on CPU pinned memory */
+
+    /* Optional standard ibverbs backend used by the Send/Receive example. */
+    struct ibv_qp *ibv_qp;
+    struct ibv_cq *ibv_scq;
+    struct ibv_cq *ibv_rcq;
+    struct doca_gpu_verbs_qp *ibv_qp_gverbs;
+    struct doca_gpu_dev_verbs_qp *ibv_qp_gpu;
 };
 
 struct cpu_proxy_args {
