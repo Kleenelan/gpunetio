@@ -90,6 +90,7 @@ struct verbs_config {
     uint32_t num_iters;          /* total number orations per cuda kernel */
     uint32_t cuda_threads;       /* cuda threads per cuda block */
     uint16_t rq_nwqe{0};         /* RQ size; zero keeps the legacy SQ-only behavior */
+    uint32_t qp_type{DOCA_VERBS_QP_TYPE_RC}; /* RC or UC QP transport */
     bool use_low_level{false};   /* Send/Recv example: use low-level WQE/CQE APIs */
     bool use_immediate{false};   /* Send/Recv example: use SEND_IMM instead of SEND */
     uint32_t message_size{64};   /* Send/Recv example message size in bytes */

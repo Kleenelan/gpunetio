@@ -36,6 +36,14 @@
 
 #include "verbs_common.h"
 
+static uint16_t get_oob_port() {
+    const char *port_env = getenv("GPUNETIO_OOB_PORT");
+    if (port_env == nullptr) return 2000;
+
+    int port = atoi(port_env);
+    return (port > 0 && port <= 65535) ? static_cast<uint16_t>(port) : 2000;
+}
+
 /*
  * OOB connection to exchange RDMA info - server side
  *
@@ -67,7 +75,7 @@ int oob_verbs_connection_server_setup(int *oob_sock_fd, int *oob_client_sock) {
 
     /* Set port and IP: */
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(2000);
+    server_addr.sin_port = htons(get_oob_port());
     server_addr.sin_addr.s_addr = INADDR_ANY; /* listen on any interface */
 
     /* Bind to the set port and IP: */
@@ -138,7 +146,7 @@ int oob_verbs_connection_client_setup(const char *server_ip, int *oob_sock_fd) {
 
     /* Set port and IP the same as server-side: */
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(2000);
+    server_addr.sin_port = htons(get_oob_port());
     server_addr.sin_addr.s_addr = inet_addr(server_ip);
 
     /* Send connection request to server: */
@@ -238,7 +246,7 @@ doca_error_t create_verbs_resources(struct verbs_config *cfg, struct verbs_resou
     union ibv_gid rgid;
     int ret = 0;
     struct ibv_port_attr port_attr;
-    struct doca_gpu_verbs_qp_init_attr_hl qp_init;
+    struct doca_gpu_verbs_qp_init_attr_hl qp_init = {};
     int cuda_id = 0;
     cudaError_t cuda_ret;
 
@@ -320,6 +328,7 @@ doca_error_t create_verbs_resources(struct verbs_config *cfg, struct verbs_resou
     qp_init.ibpd = resources->verbs_pd;
     qp_init.sq_nwqe = VERBS_TEST_QUEUE_SIZE;
     qp_init.rq_nwqe = cfg->rq_nwqe;
+    qp_init.qp_type = cfg->qp_type;
     qp_init.nic_handler = resources->nic_handler;
     qp_init.mreg_type = DOCA_GPUNETIO_VERBS_MEM_REG_TYPE_DEFAULT;
     qp_init.send_dbr_mode_ext = resources->send_dbr_mode_ext;
@@ -495,10 +504,13 @@ doca_error_t connect_verbs_qp(struct verbs_resources *resources) {
         goto destroy_verbs_qp_attr;
     }
 
-    status = doca_verbs_qp_attr_set_atomic_mode(verbs_qp_attr, DOCA_VERBS_QP_ATOMIC_MODE_IB_SPEC);
-    if (status != DOCA_SUCCESS) {
-        DOCA_LOG(LOG_ERR, "Failed to set destination QP number");
-        goto destroy_verbs_qp_attr;
+    if (resources->cfg->qp_type == DOCA_VERBS_QP_TYPE_RC) {
+        status =
+            doca_verbs_qp_attr_set_atomic_mode(verbs_qp_attr, DOCA_VERBS_QP_ATOMIC_MODE_IB_SPEC);
+        if (status != DOCA_SUCCESS) {
+            DOCA_LOG(LOG_ERR, "Failed to set atomic mode");
+            goto destroy_verbs_qp_attr;
+        }
     }
 
     status = doca_verbs_qp_attr_set_ah_attr(verbs_qp_attr, resources->verbs_ah_attr);
@@ -522,8 +534,10 @@ doca_error_t connect_verbs_qp(struct verbs_resources *resources) {
     status = doca_verbs_qp_modify(
         resources->qp->qp, verbs_qp_attr,
         DOCA_VERBS_QP_ATTR_NEXT_STATE | DOCA_VERBS_QP_ATTR_ALLOW_REMOTE_WRITE |
-            DOCA_VERBS_QP_ATTR_ALLOW_REMOTE_READ | DOCA_VERBS_QP_ATTR_ATOMIC_MODE |
-            DOCA_VERBS_QP_ATTR_PKEY_INDEX | DOCA_VERBS_QP_ATTR_PORT_NUM);
+            DOCA_VERBS_QP_ATTR_PKEY_INDEX | DOCA_VERBS_QP_ATTR_PORT_NUM |
+            (resources->cfg->qp_type == DOCA_VERBS_QP_TYPE_RC
+                 ? (DOCA_VERBS_QP_ATTR_ALLOW_REMOTE_READ | DOCA_VERBS_QP_ATTR_ATOMIC_MODE)
+                 : 0));
     if (status != DOCA_SUCCESS) {
         DOCA_LOG(LOG_ERR, "Failed to modify QP: %d", status);
         goto destroy_verbs_qp_attr;
@@ -539,7 +553,9 @@ doca_error_t connect_verbs_qp(struct verbs_resources *resources) {
         resources->qp->qp, verbs_qp_attr,
         DOCA_VERBS_QP_ATTR_NEXT_STATE | DOCA_VERBS_QP_ATTR_RQ_PSN | DOCA_VERBS_QP_ATTR_DEST_QP_NUM |
             DOCA_VERBS_QP_ATTR_PATH_MTU | DOCA_VERBS_QP_ATTR_AH_ATTR |
-            DOCA_VERBS_QP_ATTR_MIN_RNR_TIMER | DOCA_VERBS_QP_ATTR_MAX_DEST_RD_ATOMIC);
+            (resources->cfg->qp_type == DOCA_VERBS_QP_TYPE_RC
+                 ? (DOCA_VERBS_QP_ATTR_MIN_RNR_TIMER | DOCA_VERBS_QP_ATTR_MAX_DEST_RD_ATOMIC)
+                 : 0));
     if (status != DOCA_SUCCESS) {
         DOCA_LOG(LOG_ERR, "Failed to modify QP: %d", status);
         goto destroy_verbs_qp_attr;
@@ -551,11 +567,13 @@ doca_error_t connect_verbs_qp(struct verbs_resources *resources) {
         goto destroy_verbs_qp_attr;
     }
 
-    status = doca_verbs_qp_modify(resources->qp->qp, verbs_qp_attr,
-                                  DOCA_VERBS_QP_ATTR_NEXT_STATE | DOCA_VERBS_QP_ATTR_SQ_PSN |
-                                      DOCA_VERBS_QP_ATTR_ACK_TIMEOUT |
-                                      DOCA_VERBS_QP_ATTR_RETRY_CNT | DOCA_VERBS_QP_ATTR_RNR_RETRY |
-                                      DOCA_VERBS_QP_ATTR_MAX_QP_RD_ATOMIC);
+    status = doca_verbs_qp_modify(
+        resources->qp->qp, verbs_qp_attr,
+        DOCA_VERBS_QP_ATTR_NEXT_STATE | DOCA_VERBS_QP_ATTR_SQ_PSN |
+            (resources->cfg->qp_type == DOCA_VERBS_QP_TYPE_RC
+                 ? (DOCA_VERBS_QP_ATTR_ACK_TIMEOUT | DOCA_VERBS_QP_ATTR_RETRY_CNT |
+                    DOCA_VERBS_QP_ATTR_RNR_RETRY | DOCA_VERBS_QP_ATTR_MAX_QP_RD_ATOMIC)
+                 : 0));
     if (status != DOCA_SUCCESS) {
         DOCA_LOG(LOG_ERR, "Failed to modify QP: %d", status);
         goto destroy_verbs_qp_attr;
