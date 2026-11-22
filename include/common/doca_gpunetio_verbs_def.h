@@ -115,6 +115,7 @@ extern "C" {
 #define DOCA_GPUNETIO_VERBS_WQE_PI_MASK 0xFFFF
 
 #define DOCA_GPUNETIO_IB_MLX5_WQE_SQ_SHIFT 6
+#define DOCA_GPUNETIO_IB_MLX5_WQE_RQ_SHIFT 4
 
 /**
  * Set to 1 if mkeys passed to the wqe functions
@@ -279,6 +280,7 @@ enum doca_gpu_verbs_send_dbr_mode_ext {
  */
 enum doca_gpu_dev_verbs_qp_type {
     DOCA_GPUNETIO_VERBS_QP_SQ = 0,  ///< Use QP SQ
+    DOCA_GPUNETIO_VERBS_QP_RQ = 1,  ///< Use QP RQ
 };
 
 enum doca_gpu_dev_verbs_exec_scope {
@@ -391,6 +393,7 @@ enum {
 
 enum {
     DOCA_GPUNETIO_IB_MLX5_INLINE_SEG = 0x80000000,
+    DOCA_GPUNETIO_IB_MLX5_INLINE_SCATTER_32 = 0x4,
 };
 
 enum {

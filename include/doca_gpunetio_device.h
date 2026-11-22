@@ -42,6 +42,7 @@
 #include "device/doca_gpunetio_dev_verbs_cq.cuh"
 #include "device/doca_gpunetio_dev_verbs_qp.cuh"
 #include "device/doca_gpunetio_dev_verbs_onesided.cuh"
+#include "device/doca_gpunetio_dev_verbs_twosided.cuh"
 #include "device/doca_gpunetio_dev_verbs_counter.cuh"
 
 #endif /* DOCA_GPUNETIO_DEVICE_H */

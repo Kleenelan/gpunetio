@@ -54,6 +54,38 @@ __device__ static __forceinline__ struct doca_gpu_dev_verbs_cq *doca_gpu_dev_ver
 }
 
 /**
+ * @brief Return device CQ RQ pointer from a device QP.
+ */
+__device__ static __forceinline__ struct doca_gpu_dev_verbs_cq *doca_gpu_dev_verbs_qp_get_cq_rq(
+    struct doca_gpu_dev_verbs_qp *qp) {
+    return &(qp->cq_rq);
+}
+
+/** Return non-zero when the receive CQE carries 32B inline data. */
+__device__ static __forceinline__ uint32_t doca_gpu_dev_verbs_cqe_is_inline(
+    struct doca_gpunetio_ib_mlx5_cqe64 *cqe64) {
+    return cqe64->op_own & DOCA_GPUNETIO_IB_MLX5_INLINE_SCATTER_32;
+}
+
+/** Return the number of bytes reported by a receive CQE. */
+__device__ static __forceinline__ uint32_t doca_gpu_dev_verbs_cqe_get_bytes(
+    struct doca_gpunetio_ib_mlx5_cqe64 *cqe64) {
+    return doca_gpu_dev_verbs_bswap32(cqe64->byte_cnt);
+}
+
+/** Return the immediate value reported by a receive CQE. */
+__device__ static __forceinline__ uint32_t doca_gpu_dev_verbs_cqe_get_imm(
+    struct doca_gpunetio_ib_mlx5_cqe64 *cqe64) {
+    return doca_gpu_dev_verbs_bswap32(cqe64->imm_inval_pkey);
+}
+
+/** Return a pointer to the inline data in a receive CQE. */
+__device__ static __forceinline__ uint8_t *doca_gpu_dev_verbs_cqe_get_inl_data(
+    struct doca_gpunetio_ib_mlx5_cqe64 *cqe64) {
+    return ((struct doca_gpu_dev_verbs_cqe64_inline *)cqe64)->inl_data;
+}
+
+/**
  * @brief Increament and round up CQE id
  *
  * @param[in] cqe_idx - cqe idx
@@ -64,6 +96,13 @@ __device__ static __forceinline__ struct doca_gpu_dev_verbs_cq *doca_gpu_dev_ver
 __device__ static __forceinline__ uint32_t doca_gpu_dev_verbs_cqe_idx_inc_mask(uint32_t cqe_idx,
                                                                                uint32_t increment) {
     return (cqe_idx + increment) & DOCA_GPUNETIO_VERBS_CQE_CI_MASK;
+}
+
+template <enum doca_gpu_dev_verbs_qp_type qp_type>
+__device__ static __forceinline__ bool doca_gpu_dev_verbs_cq_is_error(uint8_t opcode) {
+    return (qp_type == DOCA_GPUNETIO_VERBS_QP_RQ)
+               ? (opcode == DOCA_GPUNETIO_IB_MLX5_CQE_RESP_ERR)
+               : (opcode == DOCA_GPUNETIO_IB_MLX5_CQE_REQ_ERR);
 }
 
 #if DOCA_GPUNETIO_VERBS_ENABLE_DEBUG == 1
@@ -142,9 +181,9 @@ __device__ static __forceinline__ int doca_priv_gpu_dev_verbs_poll_one_cq_at(
     opcode = opown >> DOCA_GPUNETIO_VERBS_MLX5_CQE_OPCODE_SHIFT;
 
 #if DOCA_GPUNETIO_VERBS_ENABLE_DEBUG == 1
-    if (opcode == DOCA_GPUNETIO_IB_MLX5_CQE_REQ_ERR) doca_gpu_dev_verbs_cq_print_cqe_err(cqe64);
+    if (doca_gpu_dev_verbs_cq_is_error<qp_type>(opcode)) doca_gpu_dev_verbs_cq_print_cqe_err(cqe64);
 #endif
-    return (opcode == DOCA_GPUNETIO_IB_MLX5_CQE_REQ_ERR) * -EIO;
+    return (doca_gpu_dev_verbs_cq_is_error<qp_type>(opcode)) * -EIO;
 }
 
 /**
@@ -223,9 +262,9 @@ __device__ static __forceinline__ int doca_priv_gpu_dev_verbs_poll_cq_at(
     opcode = opown >> DOCA_GPUNETIO_VERBS_MLX5_CQE_OPCODE_SHIFT;
 
 #if DOCA_GPUNETIO_VERBS_ENABLE_DEBUG == 1
-    if (opcode == DOCA_GPUNETIO_IB_MLX5_CQE_REQ_ERR) doca_gpu_dev_verbs_cq_print_cqe_err(cqe64);
+    if (doca_gpu_dev_verbs_cq_is_error<qp_type>(opcode)) doca_gpu_dev_verbs_cq_print_cqe_err(cqe64);
 #endif
-    return (opcode == DOCA_GPUNETIO_IB_MLX5_CQE_REQ_ERR) * -EIO;
+    return (doca_gpu_dev_verbs_cq_is_error<qp_type>(opcode)) * -EIO;
 }
 
 /**
@@ -278,8 +317,8 @@ __device__ static __forceinline__ int doca_priv_gpu_dev_verbs_poll_cq_collapsed_
     // If idx is a lot greater than cons_idx, we might get incorrect result due
     // to wqe_counter wraparound. We need to check prod_idx to be sure that idx
     // has already been submitted.
-    while (doca_gpu_dev_verbs_atomic_read<uint64_t, resource_sharing_mode>(&qp->sq_wqe_pi) <
-           cons_index);
+    uint64_t *wqe_pi = (qp_type == DOCA_GPUNETIO_VERBS_QP_RQ) ? &qp->rq_wqe_pi : &qp->sq_wqe_pi;
+    while (doca_gpu_dev_verbs_atomic_read<uint64_t, resource_sharing_mode>(wqe_pi) < cons_index);
     doca_gpu_dev_verbs_fence_acquire<DOCA_GPUNETIO_VERBS_SYNC_SCOPE_GPU>();
 
     do {
@@ -309,10 +348,10 @@ __device__ static __forceinline__ int doca_priv_gpu_dev_verbs_poll_cq_collapsed_
                   (((uint16_t)cons_index > wqe_counter) ? 0x10000ULL : 0x0);
 
 #if DOCA_GPUNETIO_VERBS_ENABLE_DEBUG == 1
-    if (opcode == DOCA_GPUNETIO_IB_MLX5_CQE_REQ_ERR) doca_gpu_dev_verbs_cq_print_cqe_err(cqe64);
+    if (doca_gpu_dev_verbs_cq_is_error<qp_type>(opcode)) doca_gpu_dev_verbs_cq_print_cqe_err(cqe64);
 #endif
 
-    return ((opcode == DOCA_GPUNETIO_IB_MLX5_CQE_REQ_ERR) * -EIO);
+    return ((doca_gpu_dev_verbs_cq_is_error<qp_type>(opcode)) * -EIO);
 }
 
 /**
@@ -330,14 +369,76 @@ template <enum doca_gpu_dev_verbs_resource_sharing_mode resource_sharing_mode =
 __device__ static __forceinline__ int doca_gpu_dev_verbs_poll_cq_collapsed_at(
     struct doca_gpu_dev_verbs_qp *qp, uint64_t cons_index) {
     uint64_t new_cqe_ci = 0;
+    struct doca_gpu_dev_verbs_cq *cq = (qp_type == DOCA_GPUNETIO_VERBS_QP_RQ)
+                                           ? doca_gpu_dev_verbs_qp_get_cq_rq(qp)
+                                           : doca_gpu_dev_verbs_qp_get_cq_sq(qp);
     int status = doca_priv_gpu_dev_verbs_poll_cq_collapsed_at<resource_sharing_mode, qp_type>(
-        qp, doca_gpu_dev_verbs_qp_get_cq_sq(qp), cons_index, &new_cqe_ci);
+        qp, cq, cons_index, &new_cqe_ci);
     if (status == 0) {
         doca_gpu_dev_verbs_fence_acquire_nvidia_nic();
-        doca_gpu_dev_verbs_atomic_max<uint64_t, resource_sharing_mode>(
-            &(doca_gpu_dev_verbs_qp_get_cq_sq(qp)->cqe_ci), new_cqe_ci);
+        doca_gpu_dev_verbs_atomic_max<uint64_t, resource_sharing_mode>(&cq->cqe_ci, new_cqe_ci);
     }
     return status;
+}
+
+/**
+ * @brief Poll a CQE at a specific index and return its address.
+ *
+ * Unlike doca_gpu_dev_verbs_poll_cq_at(), this overload also returns the CQE so
+ * two-sided receivers can inspect byte_cnt, immediate data and inline data.
+ */
+template <enum doca_gpu_dev_verbs_resource_sharing_mode resource_sharing_mode =
+              DOCA_GPUNETIO_VERBS_RESOURCE_SHARING_MODE_GPU,
+          enum doca_gpu_dev_verbs_qp_type qp_type = DOCA_GPUNETIO_VERBS_QP_SQ,
+          enum doca_gpu_dev_verbs_blocking_mode blocking_mode =
+              DOCA_GPUNETIO_VERBS_BLOCKING_MODE_ENABLED>
+__device__ static __forceinline__ int doca_gpu_dev_verbs_poll_cq(
+    struct doca_gpu_dev_verbs_cq *cq, uint64_t cons_index,
+    struct doca_gpunetio_ib_mlx5_cqe64 **out_cqe64) {
+    struct doca_gpunetio_ib_mlx5_cqe64 *cqe =
+        (struct doca_gpunetio_ib_mlx5_cqe64 *)__ldg((uintptr_t *)&cq->cqe_daddr);
+    const uint32_t cqe_num = __ldg(&cq->cqe_num);
+    const uint32_t idx = cons_index & (cqe_num - 1);
+    struct doca_gpunetio_ib_mlx5_cqe64 *cqe64 = &cqe[idx];
+    uint64_t cqe_ci;
+    uint8_t opown;
+    uint8_t opcode;
+    bool observed_completion;
+
+    if (out_cqe64 != nullptr) *out_cqe64 = cqe64;
+
+    while (true) {
+        cqe_ci = doca_gpu_dev_verbs_load_relaxed<resource_sharing_mode>(&cq->cqe_ci);
+        [[unlikely]] if (cons_index < cqe_ci)
+            return 0;
+
+#if __CUDA_ARCH__ >= 900
+        opown = doca_gpu_dev_verbs_load_relaxed_sys_global((uint8_t *)&cqe64->op_own);
+        observed_completion =
+            !((opown & DOCA_GPUNETIO_IB_MLX5_CQE_OWNER_MASK) ^ !!(cons_index & cqe_num));
+#else
+        uint32_t cqe_chunk =
+            doca_gpu_dev_verbs_load_relaxed_sys_global((uint32_t *)&cqe64->wqe_counter);
+        cqe_chunk = doca_gpu_dev_verbs_bswap32(cqe_chunk);
+        uint16_t wqe_counter = cqe_chunk >> 16;
+        opown = cqe_chunk & 0xff;
+        observed_completion =
+            !((opown & DOCA_GPUNETIO_IB_MLX5_CQE_OWNER_MASK) ^ !!(cons_index & cqe_num)) &&
+            (wqe_counter == ((uint32_t)cons_index & 0xffff));
+#endif
+        if (observed_completion) break;
+        if (blocking_mode == DOCA_GPUNETIO_VERBS_BLOCKING_MODE_DISABLED) return EBUSY;
+    }
+
+    opcode = opown >> DOCA_GPUNETIO_VERBS_MLX5_CQE_OPCODE_SHIFT;
+#if DOCA_GPUNETIO_VERBS_ENABLE_DEBUG == 1
+    if (doca_gpu_dev_verbs_cq_is_error<qp_type>(opcode)) doca_gpu_dev_verbs_cq_print_cqe_err(cqe64);
+#endif
+    if (doca_gpu_dev_verbs_cq_is_error<qp_type>(opcode)) return -EIO;
+
+    doca_gpu_dev_verbs_fence_acquire_nvidia_nic();
+    doca_gpu_dev_verbs_atomic_max<uint64_t, resource_sharing_mode>(&cq->cqe_ci, cons_index + 1);
+    return 0;
 }
 
 /**

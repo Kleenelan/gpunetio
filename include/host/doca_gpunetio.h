@@ -95,6 +95,8 @@ struct doca_gpu_dev_verbs_qp;
 struct doca_gpu_dev_verbs_cq;
 struct doca_verbs_cq_t;
 struct doca_verbs_qp_t;
+struct ibv_qp;
+struct ibv_cq;
 
 /**
  * @brief GPUNetIO QP handler accessible from CPU
@@ -104,7 +106,11 @@ struct doca_gpu_verbs_qp {
     doca_gpu_t *gpu_dev;
     doca_verbs_qp_t *qp;
     uint64_t *cpu_db;
+    uint64_t *cpu_db_rq;
+    uint64_t *cpu_db_gpu;
+    uint64_t *cpu_db_rq_gpu;
     uint64_t sq_wqe_pi_last;
+    uint64_t rq_wqe_pi_last;
     uint64_t *sq_db;
     __be32 *sq_dbrec;
     bool cpu_proxy;
@@ -117,6 +123,13 @@ struct doca_gpu_verbs_qp {
     struct doca_gpu_dev_verbs_qp *qp_gpu;
     /* CPU-accessible GPU handler. Linked with qp_gpu via GDRCopy. */
     struct doca_gpu_dev_verbs_qp *qp_gpu_h;
+
+    /* Optional standard ibverbs QP backend and host mappings owned by this export. */
+    struct ibv_qp *ibv_qp;
+    struct ibv_cq *ibv_cq_sq;
+    struct ibv_cq *ibv_cq_rq;
+    void *ibv_map_base[16];
+    uint32_t ibv_map_num;
 };
 
 /**
@@ -226,7 +239,9 @@ doca_error_t doca_gpu_mem_free(doca_gpu_t *gpu, void *memptr_gpu);
  * @param [in] gpu_qp_umem_dev_ptr
  * GPU external UMEM.
  * @param [in] cq_sq
- * DOCA Verbs CQ SQ CPU object connected to the QP.
+ * DOCA Verbs SQ CQ CPU object connected to the QP.
+ * @param [in] cq_rq
+ * DOCA Verbs RQ CQ CPU object connected to the QP. Pass NULL for an SQ-only QP.
  * @param [in] send_dbr_mode_ext
  * Send DBR mode.
  * @param [out] qp_out
@@ -240,6 +255,7 @@ doca_error_t doca_gpu_mem_free(doca_gpu_t *gpu, void *memptr_gpu);
 doca_error_t doca_gpu_verbs_export_qp(doca_gpu_t *gpu_dev, doca_verbs_qp_t *qp,
                                       enum doca_gpu_dev_verbs_nic_handler nic_handler,
                                       void *gpu_qp_umem_dev_ptr, doca_verbs_cq_t *cq_sq,
+                                      doca_verbs_cq_t *cq_rq,
                                       enum doca_gpu_verbs_send_dbr_mode_ext send_dbr_mode_ext,
                                       struct doca_gpu_verbs_qp **qp_out);
 
@@ -257,6 +273,18 @@ doca_error_t doca_gpu_verbs_export_qp(doca_gpu_t *gpu_dev, doca_verbs_qp_t *qp,
  * - DOCA_ERROR_INVALID_VALUE - if an invalid input had been received.
  */
 doca_error_t doca_gpu_verbs_unexport_qp(doca_gpu_t *gpu_dev, struct doca_gpu_verbs_qp *qp);
+
+/**
+ * Export a standard rdma-core ibv_qp and its SQ/RQ completion queues to GPU.
+ *
+ * The ibv QP, CQs, WQ buffers and DBRs remain owned by the caller. This function
+ * creates the CUDA mappings needed by the device data path and releases those
+ * mappings in doca_gpu_verbs_unexport_qp(). Use a separate CQ for SQ and RQ.
+ */
+doca_error_t doca_gpu_verbs_ibv_export_qp(doca_gpu_t *gpu_dev, struct ibv_qp *qp,
+                                          struct ibv_cq *cq_sq, struct ibv_cq *cq_rq,
+                                          enum doca_gpu_dev_verbs_nic_handler nic_handler,
+                                          struct doca_gpu_verbs_qp **qp_out);
 
 /**
  * Get a GPUNetIO GPU device handler handler from a GPUNetIO Verbs QP object.
@@ -355,6 +383,12 @@ doca_error_t doca_gpu_verbs_unexport_uar(uint64_t *uar_addr_gpu);
  */
 doca_error_t doca_gpu_verbs_cpu_proxy_progress(struct doca_gpu_verbs_qp *qp_cpu,
                                                bool *out_progressed);
+
+/** Query whether a GPUNetIO QP requires CPU proxy doorbell progression. */
+doca_error_t doca_gpu_verbs_cpu_proxy_enabled(struct doca_gpu_verbs_qp *qp_cpu, bool *enabled);
+
+/** Return a stable string representation of a NIC handler value. */
+const char *doca_gpu_nic_handler_to_string(enum doca_gpu_dev_verbs_nic_handler nic_handler);
 
 /**
  * Create a service object.

@@ -15,7 +15,7 @@ The table below highlights the key differences between this DOCA GPUNetIO open-s
 | Verbs CPU control path | Closed-source shared library | Open-source C++ files |
 | GPUNetIO CPU control path | Closed-source shared library | Open-source C++ files |
 | GPUNetIO GPU data path for RDMA Verbs one-sided | Yes | Yes |
-| GPUNetIO GPU data path for RDMA Verbs two-sided | Yes | No |
+| GPUNetIO GPU data path for RDMA Verbs two-sided | Yes | Yes |
 | GPUNetIO GPU data path for Ethernet | Yes | No |
 | GPUNetIO GPU data path for DMA | Yes | No |
 
@@ -164,7 +164,7 @@ Wed Apr  1 10:41:52 2026 [INFO] [src/doca_verbs_umem.cpp]: 161: doca_verbs_umem_
 
 ## Examples
 
-Two examples are included to demonstrate usage and measure performance.
+The examples below demonstrate usage and measure performance or validate correctness.
 Make sure to build `libdoca_gpunetio.so` **before compiling examples**.
 
 > All examples require both a client and a server running on network-connected machines.
@@ -239,6 +239,22 @@ Validation success message (server):
 ```
 Validation successful! Data received correctly from client.
 ```
+
+### Example 4: `gpunetio_verbs_send_recv`
+
+This example demonstrates two-sided RC Send/Receive using both high-level and low-level APIs. It supports `SEND`, `SEND_IMM`, GPU SM doorbells and CPU proxy mode. The `ibv` backend is the default; the custom DEVX backend can be selected with `-b devx`.
+
+**Run (server):**
+```bash
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/doca-gpunetio/lib DOCA_GPUNETIO_LOG=6 ./gpunetio_verbs_send_recv -g 65:00.0 -d mlx5_0 -l 3 -p 2 -a high -b ibv
+```
+
+**Run (client):**
+```bash
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/doca-gpunetio/lib DOCA_GPUNETIO_LOG=6 ./gpunetio_verbs_send_recv -g 65:00.0 -d mlx5_1 -l 3 -p 2 -a high -b ibv -c 192.168.0.200
+```
+
+For low-level `SEND_IMM`, use `-a low -m`. For CPU proxy mode, use `-p 1`. See `example_rc_send_receive_run.md` for the full command matrix and `principle.md` for implementation details.
 
 ## Acknowledgments
 

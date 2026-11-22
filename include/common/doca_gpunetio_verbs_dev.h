@@ -150,6 +150,29 @@ struct doca_gpu_dev_verbs_wqe {
 } __attribute__((__aligned__(8)));
 
 /**
+ * Describes a 64B CQE carrying up to 32B of inline receive data.
+ */
+struct doca_gpu_dev_verbs_cqe64_inline {
+    uint8_t inl_data[32];
+    __be32 srqn_uidx;
+    __be32 imm_inval_pkey;
+    uint8_t app;
+    uint8_t app_op;
+    __be16 app_info;
+    __be32 byte_cnt;
+    __be64 timestamp;
+    __be32 sop_drop_qpn;
+    __be16 wqe_counter;
+    uint8_t signature;
+    uint8_t op_own;
+} __attribute__((__packed__));
+
+#if __cplusplus >= 201103L
+static_assert(sizeof(struct doca_gpu_dev_verbs_cqe64_inline) == DOCA_GPUNETIO_VERBS_CQE_SIZE,
+              "Inline CQE must be 64B");
+#endif
+
+/**
  * Describes GPUNetIO dev CQ
  */
 struct doca_gpu_dev_verbs_cq {
@@ -187,11 +210,28 @@ struct doca_gpu_dev_verbs_qp {
     uint8_t *sq_wqe_daddr;         /**< SQ WQE address */
     __be32 *sq_dbrec;              /**< SQ DBREC address */
     uint64_t *sq_db;               /**< SQ DB address */
-    uint8_t reserved1[8];          /**< Reserved */
-    uint8_t reserved2[64];         /**< Reserved */
+
+    uint32_t rq_num;               /**< RQ number (same as SQ number for RC QPs) */
+    uint32_t rcv_wqe_size;         /**< Receive WQE size in bytes */
+    uint64_t rq_wqe_pi;            /**< RQ WQE producer index */
+    uint32_t rq_wqe_num;           /**< RQ WQE num */
+    uint32_t rq_wqe_mask;          /**< RQ WQE num mask */
+    uint8_t *rq_wqe_daddr;         /**< RQ WQE address */
+    __be32 *rq_dbrec;              /**< RQ DBREC address */
+    uint64_t *rq_db;               /**< RQ CPU-proxy notification address */
+    uint64_t rq_rsvd_index;        /**< All receive WQE slots prior to this index are reserved */
+    uint64_t rq_ready_index;       /**< All receive WQE slots prior to this index are ready */
+    int rq_lock;                   /**< RQ lock */
+    uint8_t reserved1[4];          /**< Reserved */
 
     struct doca_gpu_dev_verbs_cq cq_sq; /**< SQ CQ connected to QP */
-    uint8_t reserved3[64];              /**< Reserved */
+    struct doca_gpu_dev_verbs_cq cq_rq; /**< RQ CQ connected to QP */
+
+    bool need_mcst;                /**< Receive data needs an MCST dump before it is read */
+    uint8_t reserved2[7];          /**< Reserved */
+    uint64_t last_get_wqe_idx;     /**< Last RDMA Read WQE posted index */
+    uint64_t last_dump_wqe_idx;    /**< Last dump WQE posted index */
+    uint64_t last_recv_wqe_idx;    /**< Last receive WQE posted index */
 
     enum doca_gpu_dev_verbs_nic_handler nic_handler; /**< NIC handler */
     enum doca_gpu_dev_verbs_mem_type mem_type;       /**< Memory type of the completion */

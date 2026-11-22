@@ -56,7 +56,7 @@ struct doca_gpu_verbs_qp_init_attr_hl {
     doca_dev_t *net_dev;
     struct ibv_pd *ibpd;
     uint16_t sq_nwqe;
-    uint8_t reserved1[2];
+    uint16_t rq_nwqe;             /* Set to 0 for an SQ-only QP */
     enum doca_gpu_dev_verbs_nic_handler nic_handler;
     enum doca_gpu_verbs_mem_reg_type mreg_type;
     enum doca_gpu_verbs_send_dbr_mode_ext send_dbr_mode_ext;
@@ -74,6 +74,11 @@ struct doca_gpu_verbs_qp_hl {
     doca_verbs_cq_t *cq_sq;
     void *cq_sq_umem_gpu_ptr;
     doca_verbs_umem_t *cq_sq_umem;
+
+    // RQ CQ (optional)
+    doca_verbs_cq_t *cq_rq;
+    void *cq_rq_umem_gpu_ptr;
+    doca_verbs_umem_t *cq_rq_umem;
 
     // QP
     doca_verbs_qp_t *qp;

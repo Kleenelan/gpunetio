@@ -58,3 +58,5 @@ struct doca_gpu_open {
     bool need_mcst;                    ///< Boolean value that indicates if memory consistency
                                        ///< algorithm is required for igress GPU data
 };
+
+void doca_gpu_verbs_ibv_cleanup_mappings(struct doca_gpu_verbs_qp *qp);
